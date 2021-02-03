@@ -1,0 +1,145 @@
+library(ape)
+library(vegan)
+library(ggplot2)
+library(picante)
+library(plyr)
+
+#installing DADA2 as instructed through the github website
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("dada2")
+library(dada2); packageVersion("dada2")
+
+#setwd('~/Dropbox (Smithsonian)/CBZooplankton_Metabarcode_Results/')
+#Following tutorial for DADA2 at: https://benjjneb.github.io/dada2/tutorial.html
+#On second pass followed tutorial for ITS1 because it contains info to remove primers:
+#https://benjjneb.github.io/dada2/ITS_workflow.html
+list.files(getwd())
+path <- "~/Dropbox (Smithsonian)/MERC_18S_Fastq_Sequences/Raw_seqs/" #directory with the fastq files after unzipping
+list.files(path)
+
+# Forward and reverse fastq filenames have format: SAMPLENAME_R1_001.fastq and SAMPLENAME_R2_001.fastq
+fnFs <- sort(list.files(path, pattern="_R1_001.fastq", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
+
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+
+#probably don't need to do this --I checked all of these with FastQC first and these plots basically give the same info
+plotQualityProfile(fnFs[1:2], n = 10000) 
+plotQualityProfile(fnRs[1:2]) 
+
+#Primers removed with cutadapt, run separately in terminal with BratePrimers_cutadapt.txt
+#Output from cutadapt saved to "Results_cutadapt_XXX"
+path2 = "~/Dropbox (Smithsonian)/XXXX/trimmed/"
+list.files(path2)
+
+#Read the trimmed sequence files in
+cutFs <- sort(list.files(path2, pattern = "_R1_001_trim.fastq", full.names = TRUE))
+cutRs <- sort(list.files(path2, pattern = "_R2_001_trim.fastq", full.names = TRUE))
+
+get.sample.name <- function(fname) strsplit(basename(fname), "_")[[1]][1]
+sample.names <- unname(sapply(cutFs, get.sample.name))
+head(sample.names)
+
+#Check the quality of reads in the sequences with the primers removed
+plotQualityProfile(cutFs[1:2])
+plotQualityProfile(cutRs[1:2])
+
+# Place primer trimmed, filtered files in filtered/ subdirectory, to be stored as fastq.gz files
+filtFs <- file.path(path2, "filtered", basename(cutFs))
+filtRs <- file.path(path2, "filtered", basename(cutRs))
+
+#Removing spurious small sequences and phix, try various outcomes for this to see how to save more sequences by making this step more lenient
+#out = standard filtering parameters by dada2
+#out3 = same as out4, but maxEE = (3,3)
+out4 <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, maxN = 0, maxEE = c(4, 4), 
+                     truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = TRUE)
+
+# The DADA2 algorithm makes use of a parametric error model (err) and every amplicon dataset has a different set of error rates. The learnErrors method learns this error model from the data, by alternating estimation of the error rates and inference of sample composition until they converge on a jointly consistent solution. As in many machine-learning problems, the algorithm must begin with an initial guess, for which the maximum possible error rates in this data are used (the error rates if only the most abundant sequence is correct and all the rest are errors).
+
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+
+#To explore the errors in base switching
+plotErrors(errF, nominalQ=TRUE)
+
+# Explanation of plot: The error rates for each possible transition (A→C, A→G, …) are shown. 
+# Points are the observed error rates for each consensus quality score. 
+# The black line shows the estimated error rates after convergence of the machine-learning algorithm. 
+# The red line shows the error rates expected under the nominal definition of the Q-score. 
+# Here the estimated error rates (black line) are a good fit to the observed rates (points), 
+# and the error rates drop with increased quality as expected. Everything looks reasonable.
+
+#Dereplicate identical reads
+derepFs <- derepFastq(filtFs, verbose = TRUE)
+derepRs <- derepFastq(filtRs, verbose = TRUE)
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names
+names(derepRs) <- sample.names
+
+#Sample inference- look at core sample inference algorithm described in paper
+dadaFs <- dada(derepFs, err=errF, multithread=TRUE)
+dadaRs <- dada(derepRs, err=errR, multithread=TRUE)
+
+#To look at returned dada-class object:
+dadaFs[[12]]#Make sure you are looking at a sample and not a negative control for this check
+dadaRs[[12]]
+
+#Now to merge the sequences
+# By default, merged sequences are only output if the forward and reverse reads overlap by at least 12 bases, 
+# and are identical to each other in the overlap region (but these conditions can be changed via function arguments).
+#As the overlap region for these should be large (>50 bp), I'm going to allow for a lot more mismatches
+#as I would have if I were doing this in usearch.
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs, verbose=TRUE, maxMismatch = 10)
+
+# Inspect the merger data.frame from the first sample
+head(mergers[[1]])#Make sure you don't do this check with a negative control
+
+#To make a ASV table
+MERCseqtab <- makeSequenceTable(mergers)
+dim(MERCseqtab) #74 24538
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(MERCseqtab)))
+
+#A number of these sequences are WAY too small or large to be correct, so I'm going to trim them out.
+#Keeping sequences between 410 and 440 bp, based on output
+MERCseqtab2 <- MERCseqtab[,nchar(colnames(MERCseqtab)) %in% 400:440]
+dim(MERCseqtab2)#74 22217
+table(nchar(getSequences(MERCseqtab2)))
+# 400  401  402  403  404  405  406  407  408  409  410  411  412  413  414  415  416  417 
+# 10    9   24   10   19   26   23   19   17   17   19   51   14   22  151  187  115  202 
+# 418  419  420  421  422  423  424  425  426  427  428  429  430  431  432  433  434  435 
+# 233  431 1247 1115  975 4638 3003 1964 1391  925  474  388  363 1586 1247  724  265  100 
+# 436  437  438  439  440 
+# 95   68   23   24    3 
+#Remove chimeras
+MERCseqtab.nochim <- removeBimeraDenovo(MERCseqtab2, method="consensus", multithread=TRUE, verbose=TRUE)
+#Identified 15359 bimeras out of 22217 input sequences.
+
+dim(MERCseqtab.nochim)
+#Leaves 6858 sequences remaining
+
+sum(MERCseqtab.nochim)/sum(MERCseqtab2)
+#0.86247-- that is an enormous number of chimeras. After reading some documentation online,
+#apparenlty this level of chimeras is expected for more conserved gene regions, so I'm continuing on
+
+#Final check allows you to track reads through the pipeline
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out4, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(MERCseqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+track
+#results of track saved in excel document
+
+#I want to see the output table
+write.csv(MERCseqtab.nochim, "~/Desktop/MERC18S_ASVtable.csv")
+
+#Testing DADA2 assign taxonomy, downloaded the recommended pr2 database for this purpose and put into a new folder
+#the command "AssignTaxonomy" was run on the console because it took a lot of RAM to run -- took about 5 hours to complete
+#Now need to import the taxa table for use.
+#This was the command used for the taxonomic assignment.
+#taxa <- assignTaxonomy(MERCseqtab.nochim, "~/R_directory/pr2_version_4.12.0_18S_dada2.fasta", multithread=TRUE)
+
+#At the end of this pipeline, I had separate otu, taxa, and sample_metadata files, which I could then load separately to use the phyloseq pipeline to explore each dataset.
