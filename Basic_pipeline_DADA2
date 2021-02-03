@@ -3,11 +3,6 @@ library(vegan)
 library(ggplot2)
 library(picante)
 library(plyr)
-
-#installing DADA2 as instructed through the github website
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("dada2")
 library(dada2); packageVersion("dada2")
 
 #setwd('~/Dropbox (Smithsonian)/CBZooplankton_Metabarcode_Results/')
