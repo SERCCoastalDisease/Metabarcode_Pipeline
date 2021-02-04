@@ -93,31 +93,25 @@ head(mergers[[1]])#Make sure you don't do this check with a negative control
 
 #To make a ASV table
 MERCseqtab <- makeSequenceTable(mergers)
-dim(MERCseqtab) #74 24538
+dim(MERCseqtab) 
+
 # Inspect distribution of sequence lengths
 table(nchar(getSequences(MERCseqtab)))
 
 #A number of these sequences are WAY too small or large to be correct, so I'm going to trim them out.
 #Keeping sequences between 410 and 440 bp, based on output
 MERCseqtab2 <- MERCseqtab[,nchar(colnames(MERCseqtab)) %in% 400:440]
-dim(MERCseqtab2)#74 22217
+dim(MERCseqtab2)
 table(nchar(getSequences(MERCseqtab2)))
-# 400  401  402  403  404  405  406  407  408  409  410  411  412  413  414  415  416  417 
-# 10    9   24   10   19   26   23   19   17   17   19   51   14   22  151  187  115  202 
-# 418  419  420  421  422  423  424  425  426  427  428  429  430  431  432  433  434  435 
-# 233  431 1247 1115  975 4638 3003 1964 1391  925  474  388  363 1586 1247  724  265  100 
-# 436  437  438  439  440 
-# 95   68   23   24    3 
+
 #Remove chimeras
 MERCseqtab.nochim <- removeBimeraDenovo(MERCseqtab2, method="consensus", multithread=TRUE, verbose=TRUE)
-#Identified 15359 bimeras out of 22217 input sequences.
+
 
 dim(MERCseqtab.nochim)
-#Leaves 6858 sequences remaining
+
 
 sum(MERCseqtab.nochim)/sum(MERCseqtab2)
-#0.86247-- that is an enormous number of chimeras. After reading some documentation online,
-#apparenlty this level of chimeras is expected for more conserved gene regions, so I'm continuing on
 
 #Final check allows you to track reads through the pipeline
 getN <- function(x) sum(getUniques(x))
