@@ -1,0 +1,8 @@
+#on SERCcomputer, cutadapt is in a conda env (named cutadaptenv), activate then run "bash nameofthisfile"
+
+mkdir trimmed
+
+for f in $(ls -1 *R1_001.fastq|sed 's/\_R1_001.fastq//')
+do
+cutadapt -g file:LabyPatho_ITS1.fa -G file:LabyPatho_ITS1R.fa -o trimmed/"$f"_R1_001_trim.fastq -p trimmed/"$f"_R2_001_trim.fastq "$f"_R1_001.fastq "$f"_R2_001.fastq -O 5 -e 0.1
+done
