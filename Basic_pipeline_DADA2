@@ -117,7 +117,7 @@ sum(MERCseqtab.nochim)/sum(MERCseqtab2)
 getN <- function(x) sum(getUniques(x))
 track <- cbind(out4, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(MERCseqtab.nochim))
 # If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
-colnames(track) <- c("filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+colnames(track) <- c("reads.in", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
 rownames(track) <- sample.names
 track
 #results of track saved in excel document
