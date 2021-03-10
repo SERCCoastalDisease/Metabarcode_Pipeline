@@ -1,0 +1,6 @@
+mkdir trimmed
+
+for f in $(ls -1 *R1_001.fastq|sed 's/\_R1_001.fastq//')
+do
+cutadapt -g file:mICOIintF_primers.fa -G file:jgHCO2198_primers_rev.fa -o trimmed/"$f"_R1_001_trim.fastq -p trimmed/"$f"_R2_001_trim.fastq "$f"_R1_001.fastq "$f"_R2_001.fastq -O 5 -e 0.1
+done
