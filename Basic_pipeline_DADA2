@@ -20,7 +20,7 @@ fnRs <- sort(list.files(path, pattern="_R2_001.fastq", full.names = TRUE))
 # Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 
-#probably don't need to do this --I checked all of these with FastQC first and these plots basically give the same info
+#generate quality plots of 2 samples in forward and reverse -- can see primers present
 plotQualityProfile(fnFs[1:2], n = 10000) 
 plotQualityProfile(fnRs[1:2]) 
 
@@ -37,7 +37,7 @@ get.sample.name <- function(fname) strsplit(basename(fname), "_")[[1]][1]
 sample.names <- unname(sapply(cutFs, get.sample.name))
 head(sample.names)
 
-#Check the quality of reads in the sequences with the primers removed
+#Check the quality of reads in the sequences with the primers removed -- cobfirm primers are gone
 plotQualityProfile(cutFs[1:2])
 plotQualityProfile(cutRs[1:2])
 
@@ -81,7 +81,7 @@ dadaRs <- dada(derepRs, err=errR, multithread=TRUE)
 dadaFs[[12]]#Make sure you are looking at a sample and not a negative control for this check
 dadaRs[[12]]
 
-#Now to merge the sequences
+#Merge the sequences
 # By default, merged sequences are only output if the forward and reverse reads overlap by at least 12 bases, 
 # and are identical to each other in the overlap region (but these conditions can be changed via function arguments).
 #As the overlap region for these should be large (>50 bp), I'm going to allow for a lot more mismatches
@@ -121,8 +121,9 @@ colnames(track) <- c("reads.in", "filtered", "denoisedF", "denoisedR", "merged",
 rownames(track) <- sample.names
 track
 #results of track saved in excel document
+write.csv(track, "~/Desktop/MERC18S_track.csv")
 
-#I want to see the output table
+#I want to keep this as an output table
 write.csv(MERCseqtab.nochim, "~/Desktop/MERC18S_ASVtable.csv")
 
 #Testing DADA2 assign taxonomy, downloaded the recommended pr2 database for this purpose and put into a new folder
@@ -130,5 +131,6 @@ write.csv(MERCseqtab.nochim, "~/Desktop/MERC18S_ASVtable.csv")
 #Now need to import the taxa table for use.
 #This was the command used for the taxonomic assignment.
 #taxa <- assignTaxonomy(MERCseqtab.nochim, "~/R_directory/pr2_version_4.12.0_18S_dada2.fasta", multithread=TRUE)
+write.csv(taxa, "~/Desktop/MERC18S_taxa.csv")
 
 #At the end of this pipeline, I had separate otu, taxa, and sample_metadata files, which I could then load separately to use the phyloseq pipeline to explore each dataset.
